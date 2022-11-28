@@ -169,6 +169,9 @@ int main(int argc, char * argv[]){
   del_nu_21 = nu21/c_m * pow((2.0 * 10000.0 * 1.3806503e-23 / mbar) ,0.5);
   if (myid==0) printf("del_nu_21: %f \n", del_nu_21);
   c_Mpc_h = c_m/(pc*1.0e6)*global_hubble;
+
+  /* LC */
+  printf("Reading in \delta T_b boxes from 21cmFAST\n");
   
   /* getting the minimum and maximum z of the boxes */
   if(global_use_Lya_xrays==0) printf("Lya and xray use set to false - assuming TS>>TCMB in t21 calculation.\n");
@@ -568,9 +571,37 @@ int main(int argc, char * argv[]){
       fclose(fid);
       for(i=0;i<global_N3_smooth;i++) xHIIdz[i] = (temp[i]);
       for(i=0;i<global_N3_smooth;i++) nHIdz[i] =  (1. - xHIIdz[i]) * (1. + dnldz[i]) * global_omega_b * 3.0 * pow(H0 * global_hubble,2.0) / (8.0 * PI * G) * pow(1.0+zbox+dz,3.0) * 0.76 / mbar;
+
+
+      /* LC also read in the \delta T_b box at z */
+      sprintf(fname,"%s/deltaTb/deltaTb_z%.3f_N%ld_L%.0f.dat",argv[1],zbox,global_N_smooth,global_L);
+      if((fid = fopen(fname,"rb"))==NULL) {
+	printf("Error opening file:%s\n",fname);
+	exit(1);
+      }
+      fread(temp,sizeof(float),global_N3_smooth,fid);
+      fclose(fid);
+      for(i=0;i<global_N3_smooth;i++) t21[i] = (temp[i]);
+
+      /* Then also read in the next \delta T_b box at z+dz */
+      sprintf(fname,"%s/deltaTb/deltaTb_z%.3f_N%ld_L%.0f.dat",argv[1],zbox+dz,global_N_smooth,global_L);
+      if((fid = fopen(fname,"rb"))==NULL) {
+	printf("Error opening file:%s\n",fname);
+	exit(1);
+      }
+      fread(temp,sizeof(float),global_N3_smooth,fid);
+      fclose(fid);
+      for(i=0;i<global_N3_smooth;i++) t21dz[i] = (temp[i]);
+
+      /* LC we can get TS, but I don't think we need it, so ignore */
+      for(i=0;i<global_N3_smooth;i++) TS[i]=100000.0;
+      for(i=0;i<global_N3_smooth;i++) TSdz[i]=100000.0;
+
+
       /************** READ IN XRAY FILES IF USING TS ****************************/
-      
-      
+
+      /* LC ignore this for now */
+      /*      
       if(zbox>(global_Zminsfr-global_Dzsim/10) && global_use_Lya_xrays==1) {
 	Tcmb=Tcmb0*(1.+zbox);
 	Tcmbdz=Tcmb0*(1.+zbox+dz);
@@ -606,7 +637,7 @@ int main(int argc, char * argv[]){
 	}
 	sprintf(fname,"%s/Lya/xalpha_z%.3lf_N%ld_L%.0f.dat",argv[1],zbox+dz,global_N_smooth,global_L);
 	if((fid = fopen(fname,"rb"))==NULL) {
-	  printf("Error opening file:%s\n",fname);
+o	  printf("Error opening file:%s\n",fname);
 	  exit(1);
 	}
 	fread(temp,sizeof(float),global_N3_smooth,fid);
@@ -650,7 +681,7 @@ int main(int argc, char * argv[]){
 	for(i=0;i<global_N3_smooth;i++) t21[i]=1.0; // added 13/09/17
         for(i=0;i<global_N3_smooth;i++) t21dz[i]=1.0; //added 13/09/17	
       }
-      
+      */
       
       fflush(stdout);
       
@@ -787,7 +818,7 @@ int main(int argc, char * argv[]){
 		      (t21_interp)*(1-fraction) +
 		      (t21dz_interp)*(fraction);
 		    		    
-		    if (del_nu < 0){ 
+		    if (del_nu < 0){
 		      nu_max = nu_f;
 		      nu_temp = nu21+del_nu_21/2.0;
 		      if (nu_max >= nu_temp) {nu_max = nu_temp;}
@@ -814,10 +845,13 @@ int main(int argc, char * argv[]){
 			
 			if (ds2>del_s) {ds2 = del_s;
 			}
-			del_I = 1.60137e-40 * nHI_pix * (ds2* pc *1.e6 / global_hubble)/(del_nu_21*1.e6);
+			/* LC ignoring the whole point of the code for now and adding */
+			/* del_I = 1.60137e-40 * nHI_pix * (ds2* pc *1.e6 / global_hubble)/(del_nu_21*1.e6); */
+			del_I = (t21_pix + Tcmb0) * (2 * k_b / pow((c_m/1420.0e6), 2.0));
 		      }
 		      else {
-			del_I = 1.60137e-40 * nHI_pix / (del_nu_21*1.e6) *(del_s * pc *1.e6 / global_hubble);
+			/* del_I = 1.60137e-40 * nHI_pix / (del_nu_21*1.e6) *(del_s * pc *1.e6 / global_hubble); */
+			del_I = (t21_pix + Tcmb0) * (2 * k_b / pow((c_m/1420.0e6), 2.0));
 		      }
 		    }
 		    
