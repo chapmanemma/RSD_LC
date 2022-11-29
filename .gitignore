@@ -1,1 +1,5 @@
 *~
+*.o
+RSD_LC
+RSD_LC_dTb
+RSD_LC_21cmFAST
