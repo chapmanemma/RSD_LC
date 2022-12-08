@@ -77,19 +77,49 @@ void get_dataset_dims(hid_t hid, char *group_name, char *dset_name, hsize_t *dim
   H5Gclose(gid);
 }
 
-herr_t read_group(hid_t hid, char *group_name, char *dset_name, float *buf) {
+herr_t read_dataset_float(hid_t hid, char *group_name, char *dset_name, float *buf) {
+  /* Reads a float dataset called dset_name under group_name from open
+     HDF5 file hid into buf */
   hid_t gid;
-  herr_t read_ok;
+  herr_t did_err;
   
   if (check_dataset(hid, group_name, dset_name)) {
     gid = open_group(hid, group_name);
-    read_ok = H5LTread_dataset(gid, dset_name, H5T_NATIVE_FLOAT, buf);
+    did_err = H5LTread_dataset(gid, dset_name, H5T_NATIVE_FLOAT, buf);
     H5Gclose(gid);
 
-    if (read_ok < 0) exit(1);
+    if (did_err < 0) {
+      printf("-- could not read dataset %s in group %s", dset_name, group_name);
+      exit(1); 
+    } else {
+      return did_err;
+    }
        
-    printf("%s/%s exists and 0: %f 10000: %f\n", group_name, dset_name, buf[0], buf[9999]);
+    // printf("%s/%s exists and 0: %f 10000: %f\n", group_name, dset_name, buf[0], buf[9999]);
   }
+}
 
-  return read_ok;
+hid_t open_hf(char *hf, unsigned mode) {
+  hid_t hid;
+  hid = H5Fopen(hf, mode, H5P_DEFAULT);
+
+  if (hid == H5I_INVALID_HID) {
+    printf("-- could not open file %s", hf);
+    exit(1);
+  } else {
+    return hid;
+  }
+}
+
+
+herr_t close_hf(hid_t hid) {
+  herr_t hid_err;
+  hid_err = H5Fclose(hid);
+
+  if (hid_err < 0) {
+    printf("-- could not close file");
+    exit(1);
+  } else {
+    return hid_err;
+  }
 }

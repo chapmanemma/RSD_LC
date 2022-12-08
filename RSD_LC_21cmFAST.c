@@ -53,7 +53,16 @@ This code has been gutted by Mario
 #include "Input_variables.h"
 #include "auxiliary.h"
 
+// LC
 #include "util/h5/hdf_util.h"
+#include "read_21cmfast.h"
+#include <assert.h>
+
+/* herr_t read_velocity(char *path, float z, long int seed, float *temp); */
+/* herr_t read_velocity_gradient(char *path, float z, long int seed, float *temp); */
+/* herr_t read_density(char *path, float z, long int seed, float *temp); */
+/* herr_t read_ionized_fraction(char *path, float z, long int seed, float *temp); */
+/* herr_t read_spin_temperature(char *path, float z, long int seed, float *temp); */
 
 float cell_interp(float* box, float del_r, float fraction_i, float fraction_j, int i_sm, int j_sm, int k_sm);
 double drdz(double z);
@@ -107,6 +116,7 @@ int main(int argc, char * argv[]){
   //******************************************************************************************
   
   char fname[256];
+  char hf[256];  // LC
   FILE *fid;
   float *temp;
   float *z_p;
@@ -163,17 +173,37 @@ int main(int argc, char * argv[]){
   const double mincut=-0.5;
   float r_p,k_r_p;
   int k_p, k_sm_p;
+
+  // LC
+  int read_Ts = 1; // read the spin temperature boxes from 21cmFAST
+  hid_t hid, hid_out, gid;
+  herr_t close_ok, hid_err;
+  int ig=0;  // testing
+  char dset_name[5] = "test";
+  char group_name[6];
+  hsize_t dset_dims[3];
+  char path[256];
+
   /* Check for correct number of parameters*/
   if(argc == 1 || argc > 10) {
     printf("Usage :  RSD_LC_v1.0.c workdir nu1 nu2 del_nu_lc FoV_deg [LC_Dim] [zmin] [zmax] [dz]\n");
     exit(1);
   }
+
+  // LC
+  /* path = &argv[1]; */
+  /* printf("%s", path); */
+  
   del_nu_21 = nu21/c_m * pow((2.0 * 10000.0 * 1.3806503e-23 / mbar) ,0.5);
   if (myid==0) printf("del_nu_21: %f \n", del_nu_21);
   c_Mpc_h = c_m/(pc*1.0e6)*global_hubble;
   
   /* getting the minimum and maximum z of the boxes */
-  if(global_use_Lya_xrays==0) printf("Lya and xray use set to false - assuming TS>>TCMB in t21 calculation.\n");
+  if(read_Ts) {
+    printf("-- reading Ts boxes\n");
+  } else {
+    printf("-- not reading Ts boxes, assuming Ts >> Tcmb\n");
+  }
   if(argc > 7) {
     zmin=atof(argv[7]);
     if (zmin < global_Zminsim) zmin=global_Zminsim;
@@ -334,174 +364,69 @@ int main(int argc, char * argv[]){
   
   
   
-  /* upload boxes FIRST TIME*/
-  
-  
-  sprintf(fname, "%s/Velocity/vel_z%.3f_N%ld_L%.0f_3.dat",argv[1],zmax-dz,global_N_smooth,global_L);
-  fid=fopen(fname,"rb");
-  if (fid==NULL) {printf("Error reading vel file... Check path or if the file exists...");  printf("Path: %s",fname);exit (1);}
-  fread(temp,sizeof(float),global_N3_smooth,fid);
-  fclose(fid);
+  /* upload boxes FIRST TIME*/  
+  /************** READ IN VELOCITY AND VELOCITY GRADIENT BOXES ***************/
+  // LC TODO put in a check that the dataset dims match global_N3_smooth
+  hid_err = read_velocity(argv[1], zmax-dz, global_seed, temp);
   for(i=0;i<global_N3_smooth;i++) v_c[i] = temp[i]; // velocity in proper units divided by c
-  
-  sprintf(fname, "%s/Velocity/vel_z%.3f_N%ld_L%.0f_3.dat",argv[1],zmax,global_N_smooth,global_L);
-  fid=fopen(fname,"rb");
-  if (fid==NULL) {printf("Error reading vel file... Check path or if the file exists..."); exit (1);}
-  fread(temp,sizeof(float),global_N3_smooth,fid);
-  fclose(fid);
+
+  // LC this is v_cdz since v_c is read in at zmax-dz and this one is
+  // read in at zmax
+  hid_err = read_velocity(argv[1], zmax, global_seed, temp);
   for(i=0;i<global_N3_smooth;i++) v_cdz[i] = temp[i]; // velocity in proper units divided by c
   
-  
-  
-  /************** READ IN VELOCITY AND VELOCITY GRADIENT BOXES ***************/
-  sprintf(fname, "%s/Velocity/dvdr_z%.3f_N%ld_L%.0f_3.dat",argv[1],zmax-dz,global_N_smooth,global_L);
-  fid=fopen(fname,"rb");
-  if (fid==NULL) {printf("Error reading dvdr file... Check path or if the file exists...");printf("Path: %s \n",fname); exit (1);}
-  fread(temp,sizeof(float),global_N3_smooth,fid);
-  fclose(fid);
+  hid_err = read_velocity_gradient(argv[1], zmax-dz, global_seed, temp);
   for(i=0;i<global_N3_smooth;i++) dvds_H[i] = temp[i]; // dvds divided by H
   
-  sprintf(fname, "%s/Velocity/dvdr_z%.3f_N%ld_L%.0f_3.dat",argv[1],zmax,global_N_smooth,global_L);
-  fid=fopen(fname,"rb");
-  if (fid==NULL) {printf("Error reading dvdr file... Check path or if the file exists..."); exit (1);}
-  fread(temp,sizeof(float),global_N3_smooth,fid);
-  fclose(fid);
+  hid_err = read_velocity_gradient(argv[1], zmax, global_seed, temp);
   for(i=0;i<global_N3_smooth;i++) dvds_Hdz[i] = temp[i]; // dvds divided by H
   
-  
   /************ READ IN DENSITY AND IONIZATION FIELDS TO CALC nHI  ***********/
-  sprintf(fname, "%s/delta/deltanl_z%.3f_N%ld_L%.0f.dat",argv[1],zmax-dz,global_N_smooth,global_L);
-  fid=fopen(fname,"rb");
-  if (fid==NULL) {
-    printf("Error opening file:%s\n",fname);
-    exit (1);}
-  fread(temp,sizeof(float),global_N3_smooth,fid);
-  fclose(fid);
-  for(i=0;i<global_N3_smooth;i++) dnl[i] = (temp[i]);
-       
-  sprintf(fname, "%s/delta/deltanl_z%.3f_N%ld_L%.0f.dat",argv[1],zmax,global_N_smooth,global_L);
-  fid=fopen(fname,"rb");
-  if (fid==NULL) {
-    printf("Error opening file:%s\n",fname);
-    exit (1);}
-  fread(temp,sizeof(float),global_N3_smooth,fid);
-  fclose(fid);
-  
-  for(i=0;i<global_N3_smooth;i++) dnldz[i] = (temp[i]);
-  
-  sprintf(fname,"%s/Ionization/xHII_z%.3f_N%ld_L%.0f.dat",argv[1],zmax-dz,global_N_smooth,global_L);
-  if((fid = fopen(fname,"rb"))==NULL) {
-    printf("Error opening file:%s\n",fname);
-    exit(1);
-  }
-  fread(temp,sizeof(float),global_N3_smooth,fid);
-  fclose(fid);
-  for(i=0;i<global_N3_smooth;i++) xHII[i] = (temp[i]);
-  
+  hid_err = read_density(argv[1], zmax-dz, global_seed, temp);
+  for(i=0;i<global_N3_smooth;i++) dnl[i] = temp[i];  // delta_nonlinear
+
+  hid_err = read_density(argv[1], zmax, global_seed, temp);
+  for(i=0;i<global_N3_smooth;i++) dnldz[i] = temp[i];  // delta_nonlinear
+
+  hid_err = read_ionized_fraction(argv[1], zmax-dz, global_seed, temp);
+  for(i=0;i<global_N3_smooth;i++) xHII[i] = temp[i];
   for(i=0;i<global_N3_smooth;i++) nHI[i] =  (1. - xHII[i]) * (1. + dnl[i]) * global_omega_b * 3.0 * pow(H0 * global_hubble,2.0) / (8.0 * PI * G) * pow(1.0+zmax-dz,3.0) * 0.76 / mbar;
   
-  sprintf(fname,"%s/Ionization/xHII_z%.3f_N%ld_L%.0f.dat",argv[1],zmax,global_N_smooth,global_L);
-  if((fid = fopen(fname,"rb"))==NULL) {
-    printf("Error opening file:%s\n",fname);
-    exit(1);
-  }
-  fread(temp,sizeof(float),global_N3_smooth,fid);
-  fclose(fid);
-  for(i=0;i<global_N3_smooth;i++) xHIIdz[i] = (temp[i]);
-  
+  hid_err = read_ionized_fraction(argv[1], zmax, global_seed, temp);
+  for(i=0;i<global_N3_smooth;i++) xHIIdz[i] = temp[i];
   for(i=0;i<global_N3_smooth;i++) nHIdz[i] =  (1. - xHIIdz[i]) * (1. + dnldz[i]) * global_omega_b * 3.0 * pow(H0 * global_hubble,2.0) / (8.0 * PI * G) * pow(1.0+zmax,3.0) * 0.76 / mbar;
-  /************** READ IN XRAY FILES IF USING TS ****************************/
-  if(zmax-dz>(global_Zminsfr-global_Dzsim/10) && global_use_Lya_xrays==1) {
+
+  // LC we just need to read in the Ts box from 21cmFAST, no extra
+  // computation required
+  if(zmax-dz>(global_Zminsfr-global_Dzsim/10) && read_Ts) {
     Tcmb=Tcmb0*(1.+zmax-dz);
     Tcmbdz=Tcmb0*(1.+zmax);
-    sprintf(fname,"%s/x_c/xc_z%.3lf_N%ld_L%.0f.dat",argv[1],zmax-dz,global_N_smooth,global_L);
-    if((fid = fopen(fname,"rb"))==NULL) {
-      printf("Error opening file:%s\n",fname);
-      exit(1);
-    }
-    fread(temp,sizeof(float),global_N3_smooth,fid);
-    fclose(fid);
-    for(i=0;i<global_N3_smooth;i++) t21[i]=(double)temp[i];
-    
-    sprintf(fname,"%s/x_c/xc_z%.3lf_N%ld_L%.0f.dat",argv[1],zmax,global_N_smooth,global_L);
-    if((fid = fopen(fname,"rb"))==NULL) {
-      printf("Error opening file:%s\n",fname);
-      exit(1);
-    }
-    fread(temp,sizeof(float),global_N3_smooth,fid);
-    fclose(fid);
-    for(i=0;i<global_N3_smooth;i++) t21dz[i]=(double)temp[i];
-    
-    sprintf(fname,"%s/Lya/xalpha_z%.3lf_N%ld_L%.0f.dat",argv[1],zmax-dz,global_N_smooth,global_L);
-    if((fid = fopen(fname,"rb"))==NULL) {
-      printf("Error opening file:%s\n",fname);
-      exit(1);
-    }
-    fread(temp,sizeof(float),global_N3_smooth,fid);
-    fclose(fid);
-    aver=0.;
-    for(i=0;i<global_N3_smooth;i++) {
-      xtot=(double)temp[i]+t21[i];
-      t21[i]=xtot/(1.+xtot);
-    }
-    sprintf(fname,"%s/Lya/xalpha_z%.3lf_N%ld_L%.0f.dat",argv[1],zmax,global_N_smooth,global_L);
-    if((fid = fopen(fname,"rb"))==NULL) {
-      printf("Error opening file:%s\n",fname);
-      exit(1);
-    }
-    fread(temp,sizeof(float),global_N3_smooth,fid);
-    fclose(fid);
-    
-    aver=0.;
-    for(i=0;i<global_N3_smooth;i++) {
-      xtotdz=(double)temp[i]+t21dz[i];
-      t21dz[i]=xtotdz/(1.+xtotdz);
-    }
-    
-    sprintf(fname,"%s/xrays/TempX_z%.3lf_N%ld_L%.0f.dat",argv[1],zmax-dz,global_N_smooth,global_L);
-    if((fid = fopen(fname,"rb"))==NULL) {
-      printf("Error opening file:%s\n",fname);
-      exit(1);
-    }
-    fread(temp,sizeof(float),global_N3_smooth,fid);
-    fclose(fid);
-    
-    for(i=0;i<global_N3_smooth;i++) {
-      t21[i]=t21[i]*(1.-Tcmb/(double)temp[i]); // Temperature correction for high redshifts
-      TS[i]=Tcmb/(1.-t21[i]);
-    }
-    
-    sprintf(fname,"%s/xrays/TempX_z%.3lf_N%ld_L%.0f.dat",argv[1],zmax,global_N_smooth,global_L);
-    if((fid = fopen(fname,"rb"))==NULL) {
-      printf("Error opening file:%s\n",fname);
-      exit(1);
-    }
-    fread(temp,sizeof(float),global_N3_smooth,fid);
-    fclose(fid);
-    
-    for(i=0;i<global_N3_smooth;i++) {
-      t21dz[i]=t21dz[i]*(1.-Tcmbdz/(double)temp[i]); // Temperature correction for high redshifts
-      TSdz[i]=Tcmbdz/(1.-t21dz[i]);
-    }
+
+    hid_err = read_spin_temperature(argv[1], zmax-dz, global_seed, temp);
+    for(i=0;i<global_N3_smooth;i++) TS[i]=(double)temp[i];
+    for(i=0;i<global_N3_smooth;i++) t21[i]= 1. - (Tcmb/TS[i]);  // LC TODO check!
+
+    hid_err = read_spin_temperature(argv[1], zmax, global_seed, temp);
+    for(i=0;i<global_N3_smooth;i++) TSdz[i]=(double)temp[i];
+    for(i=0;i<global_N3_smooth;i++) t21dz[i]= 1. - (Tcmbdz/TSdz[i]);  // LC TODO check!
   }
   
   else {
     for(i=0;i<global_N3_smooth;i++) TS[i]=100000.0;
     for(i=0;i<global_N3_smooth;i++) TSdz[i]=100000.0;
     for(i=0;i<global_N3_smooth;i++) t21[i]=1.0; // added 13/09/17
-    for(i=0;i<global_N3_smooth;i++) t21dz[i]=1.0; //added 13/09/17
-    
+    for(i=0;i<global_N3_smooth;i++) t21dz[i]=1.0; //added 13/09/17    
   }
   
   fflush(stdout);
   
-  /************START LOOPING THROUGH redshift ****************************/
+  /* /\************START LOOPING THROUGH redshift ****************************\/ */
   
   zbox=zmax-dz;
   r=rmax;
   int kk=0;
-  if (myid==0) printf("Filling maps from redshift %f \n",zbox);	
-  for(z=zmax; z>=zmin; kk++) { 
+  if (myid==0) printf("Filling maps from redshift %f \n",zbox);
+  for(z=zmax; z>=zmin; kk++) {
     
     if(z<zbox){
       zevent=0.0;
@@ -516,135 +441,42 @@ int main(int argc, char * argv[]){
       
       /* upload boxes */
       /************** READ IN VELOCITY AND VELOCITY GRADIENT BOXES ***************/
-      sprintf(fname, "%s/Velocity/dvdr_z%.3f_N%ld_L%.0f_3.dat",argv[1],zbox,global_N_smooth,global_L);
-      fid=fopen(fname,"rb");
-      if (fid==NULL) {printf("Error reading dvdr file... Check path or if the file exists...");printf("Path: %s \n",fname); exit (1);}
-      fread(temp,sizeof(float),global_N3_smooth,fid);
-      fclose(fid);
-      for(i=0;i<global_N3_smooth;i++) dvds_H[i] = temp[i]; // dvds divided by H
-      
-      sprintf(fname, "%s/Velocity/dvdr_z%.3f_N%ld_L%.0f_3.dat",argv[1],zbox+dz,global_N_smooth,global_L);
-      fid=fopen(fname,"rb");
-      if (fid==NULL) {printf("Error reading dvdr file... Check path or if the file exists..."); exit (1);}
-      fread(temp,sizeof(float),global_N3_smooth,fid);
-      fclose(fid);
-      for(i=0;i<global_N3_smooth;i++) dvds_Hdz[i] = temp[i]; // dvds divided by H
-      
+      hid_err = read_velocity_gradient(argv[1], zbox, global_seed, temp);
+      for(i=0;i<global_N3_smooth;i++) dvds_H[i] = temp[i]; // dvds divided by H *\/ */
+
+      hid_err = read_velocity_gradient(argv[1], zbox+dz, global_seed, temp);
+      for(i=0;i<global_N3_smooth;i++) dvds_Hdz[i] = temp[i]; // dvds divided by H *\/ */
+
       
       /************ READ IN DENSITY AND IONIZATION FIELDS TO CALC nHI  ***********/
-      sprintf(fname, "%s/delta/deltanl_z%.3f_N%ld_L%.0f.dat",argv[1],zbox,global_N_smooth,global_L);
-      fid=fopen(fname,"rb");
-      if (fid==NULL) {
-	printf("Error opening file:%s\n",fname);
-	exit (1);}
-      fread(temp,sizeof(float),global_N3_smooth,fid);
-      fclose(fid);
-      for(i=0;i<global_N3_smooth;i++) dnl[i] = (temp[i]);
-      
-      sprintf(fname, "%s/delta/deltanl_z%.3f_N%ld_L%.0f.dat",argv[1],zbox+dz,global_N_smooth,global_L);
-      fid=fopen(fname,"rb");
-      if (fid==NULL) {
-	printf("Error opening file:%s\n",fname);
-	exit (1);}
-      fread(temp,sizeof(float),global_N3_smooth,fid);
-      fclose(fid);        
+      hid_err = read_density(argv[1], zbox, global_seed, temp);
+      for(i=0;i<global_N3_smooth;i++) dnl[i] = temp[i];
+
+      hid_err = read_density(argv[1], zbox+dz, global_seed, temp);
       for(i=0;i<global_N3_smooth;i++) dnldz[i] = (temp[i]);
-      
-      sprintf(fname,"%s/Ionization/xHII_z%.3f_N%ld_L%.0f.dat",argv[1],zbox,global_N_smooth,global_L);
-      if((fid = fopen(fname,"rb"))==NULL) {
-	printf("Error opening file:%s\n",fname);
-	exit(1);
-      }
-      fread(temp,sizeof(float),global_N3_smooth,fid);
-      fclose(fid);
+
+      hid_err = read_ionized_fraction(argv[1], zbox, global_seed, temp);
       for(i=0;i<global_N3_smooth;i++) xHII[i] = (temp[i]);
-      
       for(i=0;i<global_N3_smooth;i++) nHI[i] =  (1.0 - xHII[i]) * (1. + dnl[i]) * global_omega_b * 3.0 * pow(H0 * global_hubble,2.0) / (8.0 * PI * G) * pow(1.0+zbox,3.0) * 0.76 / mbar;
       
-      sprintf(fname,"%s/Ionization/xHII_z%.3f_N%ld_L%.0f.dat",argv[1],zbox+dz,global_N_smooth,global_L);
-      if((fid = fopen(fname,"rb"))==NULL) {
-	printf("Error opening file:%s\n",fname);
-	exit(1);
-      }
-      fread(temp,sizeof(float),global_N3_smooth,fid);
-      fclose(fid);
+      hid_err = read_ionized_fraction(argv[1], zbox+dz, global_seed, temp);
       for(i=0;i<global_N3_smooth;i++) xHIIdz[i] = (temp[i]);
       for(i=0;i<global_N3_smooth;i++) nHIdz[i] =  (1. - xHIIdz[i]) * (1. + dnldz[i]) * global_omega_b * 3.0 * pow(H0 * global_hubble,2.0) / (8.0 * PI * G) * pow(1.0+zbox+dz,3.0) * 0.76 / mbar;
-      /************** READ IN XRAY FILES IF USING TS ****************************/
+  /*     /\************** READ IN XRAY FILES IF USING TS ****************************\/ */
       
       
-      if(zbox>(global_Zminsfr-global_Dzsim/10) && global_use_Lya_xrays==1) {
+      if(zbox>(global_Zminsfr-global_Dzsim/10) && read_Ts==1) {
 	Tcmb=Tcmb0*(1.+zbox);
 	Tcmbdz=Tcmb0*(1.+zbox+dz);
-	sprintf(fname,"%s/x_c/xc_z%.3lf_N%ld_L%.0f.dat",argv[1],zbox,global_N_smooth,global_L);
-	if((fid = fopen(fname,"rb"))==NULL) {
-	  printf("Error opening file:%s\n",fname);
-	  exit(1);
-	}
-	fread(temp,sizeof(float),global_N3_smooth,fid);
-	fclose(fid);
-	for(i=0;i<global_N3_smooth;i++) t21[i]=(double)temp[i];
-        
-	sprintf(fname,"%s/x_c/xc_z%.3lf_N%ld_L%.0f.dat",argv[1],zbox+dz,global_N_smooth,global_L);
-	if((fid = fopen(fname,"rb"))==NULL) {
-	  printf("Error opening file:%s\n",fname);
-	  exit(1);
-	}
-	fread(temp,sizeof(float),global_N3_smooth,fid);
-	fclose(fid);
-	for(i=0;i<global_N3_smooth;i++) t21dz[i]=(double)temp[i];
-        
-	sprintf(fname,"%s/Lya/xalpha_z%.3lf_N%ld_L%.0f.dat",argv[1],zbox,global_N_smooth,global_L);
-	if((fid = fopen(fname,"rb"))==NULL) {
-	  printf("Error opening file:%s\n",fname);
-	  exit(1);
-	}
-	fread(temp,sizeof(float),global_N3_smooth,fid);
-	fclose(fid);
-	aver=0.;
-	for(i=0;i<global_N3_smooth;i++) {
-	  xtot=(double)temp[i]+t21[i];
-	  t21[i]=xtot/(1.+xtot);
-	}
-	sprintf(fname,"%s/Lya/xalpha_z%.3lf_N%ld_L%.0f.dat",argv[1],zbox+dz,global_N_smooth,global_L);
-	if((fid = fopen(fname,"rb"))==NULL) {
-	  printf("Error opening file:%s\n",fname);
-	  exit(1);
-	}
-	fread(temp,sizeof(float),global_N3_smooth,fid);
-	fclose(fid);
-        
-	aver=0.;
-	for(i=0;i<global_N3_smooth;i++) {
-	  xtotdz=(double)temp[i]+t21dz[i];
-	  t21dz[i]=xtotdz/(1.+xtotdz);
-	}
-        
-	sprintf(fname,"%s/xrays/TempX_z%.3lf_N%ld_L%.0f.dat",argv[1],zbox,global_N_smooth,global_L);
-	if((fid = fopen(fname,"rb"))==NULL) {
-	  printf("Error opening file:%s\n",fname);
-	  exit(1);
-	}
-	fread(temp,sizeof(float),global_N3_smooth,fid);
-	fclose(fid);
 	
-	for(i=0;i<global_N3_smooth;i++) {
-	  t21[i]=t21[i]*(1.-Tcmb/(double)temp[i]); // Temperature correction for high redshifts
-	  TS[i]=Tcmb/(1.-t21[i]);
-	}
-        
-	sprintf(fname,"%s/xrays/TempX_z%.3lf_N%ld_L%.0f.dat",argv[1],zbox+dz,global_N_smooth,global_L);
-	if((fid = fopen(fname,"rb"))==NULL) {
-	  printf("Error opening file:%s\n",fname);
-	  exit(1);
-	}
-	fread(temp,sizeof(float),global_N3_smooth,fid);
-	fclose(fid);
-	
-	for(i=0;i<global_N3_smooth;i++) {
-	  t21dz[i]=t21dz[i]*(1.-Tcmbdz/(double)temp[i]); // Temperature correction for high redshifts
-	  TSdz[i]=Tcmbdz/(1.-t21dz[i]);
-	}
+	hid_err = read_spin_temperature(argv[1], zbox, global_seed, temp);
+	for(i=0;i<global_N3_smooth;i++) TS[i]=(double)temp[i];
+	for(i=0;i<global_N3_smooth;i++) t21[i]= 1. - (Tcmb/TS[i]);  // LC TODO check!
+
+	hid_err = read_spin_temperature(argv[1], zbox+dz, global_seed, temp);
+	for(i=0;i<global_N3_smooth;i++) TSdz[i]=(double)temp[i];
+	for(i=0;i<global_N3_smooth;i++) t21dz[i]= 1. - (Tcmbdz/TSdz[i]);  // LC TODO check!
+
       }
       else {
 	for(i=0;i<global_N3_smooth;i++) TS[i]=100000.0;
@@ -1090,3 +922,85 @@ void setup_zD(double *ZZ, double *DD,double *DD2){
     cubic_spline(DD,ZZ,1,30000,1.0e30,1.0e30,DD2);
     
 }
+
+
+/* herr_t read_density(char *path, float z, long int seed, float *temp) { */
+/*   char hf[256]; */
+/*   hid_t hid; */
+/*   herr_t hid_err; */
+  
+/*   sprintf(hf, "%s/PerturbedField_z%.3f_s%ld.h5", path, z, seed); */
+/*   hid = open_hf(hf, H5F_ACC_RDONLY); */
+/*   hid_err = read_dataset_float(hid, "PerturbedField", "density", temp); */
+/*   hid_err = close_hf(hid); */
+
+/*   return hid_err; */
+/* } */
+
+/* herr_t read_velocity(char *path, float z, long int seed, float *temp) { */
+/*   char hf[256]; */
+/*   hid_t hid; */
+/*   herr_t hid_err; */
+  
+/*   sprintf(hf, "%s/PerturbedField_z%.3f_s%ld.h5", path, z, seed); */
+/*   hid = open_hf(hf, H5F_ACC_RDONLY); */
+/*   hid_err = read_dataset_float(hid, "PerturbedField", "velocity", temp); */
+/*   hid_err = close_hf(hid); */
+
+/*   return hid_err; */
+/* } */
+
+/* herr_t read_velocity_gradient(char *path, float z, long int seed, float *temp) { */
+/*   char hf[256]; */
+/*   hid_t hid; */
+/*   herr_t hid_err; */
+
+/*   // LC need to figure out what to do here */
+/*   /\* sprintf(hf, "%s/PerturbedField_z%.3f_s%ld.h5",argv[1], z, seed); *\/ */
+/*   /\* hid = open_hf(hf, H5F_ACC_RDONLY); *\/ */
+/*   /\* hid_err = read_dataset_float(hid, "PerturbedField", "velocity", temp); *\/ */
+/*   /\* hid_err = close_hf(hid); *\/ */
+
+/*   hid_err = 0; */
+/*   return hid_err; */
+/* } */
+
+/* herr_t read_ionized_fraction(char *path, float z, long int seed, float *temp) { */
+/*   char hf[256]; */
+/*   hid_t hid; */
+/*   herr_t hid_err; */
+
+/*   sprintf(hf, "%s/IonizedBox_z%.3f_s%ld.h5", path, z, seed); */
+/*   hid = open_hf(hf, H5F_ACC_RDONLY); */
+/*   hid_err = read_dataset_float(hid, "IonizedBox", "xH_box", temp); */
+/*   hid_err = close_hf(hid); */
+/*   // LC we actually convert back to xHI later, but let's be consistent here */
+/*   for(long int i=0;i<global_N3_smooth;i++) { */
+/*     // printf("xHII %f", temp[i]); */
+/*     temp[i] = (1. - temp[i]); */
+/*     // printf("xHI %f", temp[i]); */
+/*   } */
+/*   return hid_err; */
+/* } */
+
+/* herr_t read_spin_temperature(char *path, float z, long int seed, float *temp) { */
+/*   char hf[256]; */
+/*   hid_t hid; */
+/*   herr_t hid_err; */
+  
+/*   sprintf(hf, "%s/TsBox_z%.3f_s%ld.h5", path, z, seed); */
+/*   hid = open_hf(hf, H5F_ACC_RDONLY); */
+/*   hid_err = read_dataset_float(hid, "TsBox", "Ts_box", temp); */
+/*   hid_err = close_hf(hid); */
+
+/*   // LC we just need to read in the Ts box from 21cmFAST, no extra */
+/*   // computation required, apart from converting from mK to K */
+
+/*   // LC actually I think Ts might be in K */
+/*   /\* for(long int i=0;i<global_N3_smooth;i++) { *\/ */
+/*   /\*   printf("Ts (mK) %f\n", temp[i]); *\/ */
+/*   /\*   temp[i] = (temp[i]) * 1e-3; *\/ */
+/*   /\*   printf("Ts (K) %f\n", temp[i]); *\/ */
+/*   /\* } *\/ */
+/*   return hid_err; */
+/* } */

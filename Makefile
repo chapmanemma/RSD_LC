@@ -12,16 +12,18 @@ fftwd = -lfftw3_omp -lfftw3
 #fftwf = -lfftw3f_threads -lfftw3f
 #fftwd = -lfftw3_threads -lfftw3
 
+hdf5= -lhdf5 -lhdf5_hl
+
 omp = -fopenmp -D_OMPTHREAD_
 #omp = -Xpreprocessor -fopenmp -D_OMPTHREAD_
 gsl = -lgsl -lgslcblas -lm
 deb = -g
 
 #flags = -std=c99 -Wall -O3 -march=native $(fftwd) $(fftwf) $(omp) $(gsl) -lm
-flags = -std=c99 -Wall -O3 -fcommon $(omp) $(fftwd) $(fftwf) $(gsl) -I . -I/opt/homebrew/include -L/opt/homebrew/lib
+flags = -std=c99 -Wall -O3 -fcommon $(omp) $(fftwd) $(fftwf) $(gsl) $(hdf5) -I . -I/opt/homebrew/include -L/opt/homebrew/lib
 
-auxo = auxiliary.o Input_variables.o 
-auxh = auxiliary.h Input_variables.h 
+auxo = auxiliary.o Input_variables.o util/h5/hdf_util.o read_21cmfast.o
+auxh = auxiliary.h Input_variables.h util/h5/hdf_util.h read_21cmfast.h
 
 main = RSD_LC RSD_LC_dTb RSD_LC_21cmFAST
 

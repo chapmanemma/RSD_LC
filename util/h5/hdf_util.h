@@ -11,4 +11,6 @@ int check_group(hid_t hid, char *group_name);
 hid_t open_group(hid_t hid, char *group_name);
 herr_t check_dataset(hid_t hid, char *group_name, char *dset_name);
 void get_dataset_dims(hid_t hid, char *group_name, char *dset_name, hsize_t *dims);
-herr_t read_group(hid_t hid, char *group_name, char *dset_name, float *buf);
+herr_t read_dataset_float(hid_t hid, char *group_name, char *dset_name, float *buf);
+hid_t open_hf(char *hf, unsigned mode);
+herr_t close_hf(hid_t hid);

@@ -70,7 +70,7 @@ def get_new_hf(hf):
     hf = get_new_hf('BrightnessTemp_8346578_r4573257.h5')
     print(hf)
 
-    >>> 'BrightnessTemp_6.000_731995'
+    >>> 'BrightnessTemp_z6.000_731995'
 
     """
     hf_str = '{0:s}_z{1:.3f}_s{2:d}.h5'
