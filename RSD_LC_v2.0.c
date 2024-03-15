@@ -387,7 +387,7 @@ int main(int argc, char * argv[]){
   
   for(i=0;i<global_N3_smooth;i++) dnldz[i] = (temp[i]);
   
-  sprintf(fname,"%s/Ionization/xHII_z%.3f_N%ld_L%.0f.dat",argv[1],zmax-dz,global_N_smooth,global_L);
+  sprintf(fname,"%s/Ionization/xHII_z%.3f_eff%.2lf_N%ld_L%.0f.dat",argv[1],zmax-dz,global_eff,global_N_smooth,global_L);
   if((fid = fopen(fname,"rb"))==NULL) {
     printf("Error opening file:%s\n",fname);
     exit(1);
@@ -398,7 +398,7 @@ int main(int argc, char * argv[]){
   
   for(i=0;i<global_N3_smooth;i++) nHI[i] =  (1. - xHII[i]) * (1. + dnl[i]) * global_omega_b * 3.0 * pow(H0 * global_hubble,2.0) / (8.0 * PI * G) * pow(1.0+zmax-dz,3.0) * 0.76 / mbar;
   
-  sprintf(fname,"%s/Ionization/xHII_z%.3f_N%ld_L%.0f.dat",argv[1],zmax,global_N_smooth,global_L);
+  sprintf(fname,"%s/Ionization/xHII_z%.3f_eff%.2lf_N%ld_L%.0f.dat",argv[1],zmax,global_eff,global_N_smooth,global_L);
   if((fid = fopen(fname,"rb"))==NULL) {
     printf("Error opening file:%s\n",fname);
     exit(1);
@@ -548,7 +548,7 @@ int main(int argc, char * argv[]){
       fclose(fid);        
       for(i=0;i<global_N3_smooth;i++) dnldz[i] = (temp[i]);
       
-      sprintf(fname,"%s/Ionization/xHII_z%.3f_N%ld_L%.0f.dat",argv[1],zbox,global_N_smooth,global_L);
+      sprintf(fname,"%s/Ionization/xHII_z%.3f_eff%.2lf_N%ld_L%.0f.dat",argv[1],zbox,global_eff,global_N_smooth,global_L);
       if((fid = fopen(fname,"rb"))==NULL) {
 	printf("Error opening file:%s\n",fname);
 	exit(1);
@@ -559,7 +559,7 @@ int main(int argc, char * argv[]){
       
       for(i=0;i<global_N3_smooth;i++) nHI[i] =  (1.0 - xHII[i]) * (1. + dnl[i]) * global_omega_b * 3.0 * pow(H0 * global_hubble,2.0) / (8.0 * PI * G) * pow(1.0+zbox,3.0) * 0.76 / mbar;
       
-      sprintf(fname,"%s/Ionization/xHII_z%.3f_N%ld_L%.0f.dat",argv[1],zbox+dz,global_N_smooth,global_L);
+      sprintf(fname,"%s/Ionization/xHII_z%.3f_eff%.2lf_N%ld_L%.0f.dat",argv[1],zbox+dz,global_eff,global_N_smooth,global_L);
       if((fid = fopen(fname,"rb"))==NULL) {
 	printf("Error opening file:%s\n",fname);
 	exit(1);

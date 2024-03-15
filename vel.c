@@ -88,7 +88,7 @@ int main(int argc, char * argv[]) {
 
   sprintf(fname, "%s/delta/deltanl_z%.3f_N%ld_L%.0f.dat",argv[1],z,global_N_smooth,global_L);
   fid=fopen(fname,"rb");
-  if (fid==NULL) {printf("Error reading deltanl file %s... Check path or if the file exists...", fname); exit (1);}
+  if (fid==NULL) {printf("Error reading deltanl file... Check path or if the file exists..."); exit (1);}
   fread(temp,sizeof(float),global_N3_smooth,fid);   /* read density field */
   fclose(fid);
   for(i=0;i<global_N3_smooth;i++) vel[i]=(double)temp[i];
