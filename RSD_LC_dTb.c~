@@ -787,7 +787,7 @@ int main(int argc, char * argv[]){
 		      (t21_interp)*(1-fraction) +
 		      (t21dz_interp)*(fraction);
 		    		    
-		    if (del_nu < 0){ 
+		    if (del_nu < 0){
 		      nu_max = nu_f;
 		      nu_temp = nu21+del_nu_21/2.0;
 		      if (nu_max >= nu_temp) {nu_max = nu_temp;}
